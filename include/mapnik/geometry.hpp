@@ -37,6 +37,17 @@
 
 namespace mapnik { namespace geometry {
 
+struct point_ref
+{
+    point_ref() = delete;
+    point_ref(double & x_, double & y_)
+        : x(x_), y(y_)
+    {}
+    
+    double & x;
+    double & y;    
+};
+
 struct point
 {
     point() {}
@@ -47,19 +58,9 @@ struct point
     point(point const& other) = default;
     point(point && other) noexcept = default;
     point & operator=(point const& other) = default;
+
     double x;
     double y;
-};
-
-struct point_ref
-{
-    point_ref() = delete;
-    point_ref(double &x_, double &y_)
-        : x(x_), y(y_)
-    {}
-    
-    double & x;
-    double & y;    
 };
 
 struct bounding_box
@@ -76,30 +77,47 @@ struct bounding_box
 struct line_string
 {
     template <typename T1, typename T2>
-    class ls_iterator : std::iterator<std::random_access_iterator_tag, T2>
+    class ls_iterator : std::iterator<std::random_access_iterator_tag, T2, typename T1::difference_type>
     {
       public:
+        typedef ls_iterator<T1,T2> self_type;
+        typedef T2 value_type;
+        typedef T2 reference;
+        typedef T2* pointer;
+        typedef std::random_access_iterator_tag iterator_category;
+        typedef typename T1::difference_type difference_type;
+        
+        ls_iterator() = default;
         ls_iterator(T1 iter_x_, T1 iter_y_)
             : iter_x(iter_x_), iter_y(iter_y_)
         {}
+
+        ls_iterator(ls_iterator<T1,T2> const& rhs)
+            : iter_x(rhs.iter_x), iter_y(rhs.iter_y)
+        {}
+
+        ls_iterator(ls_iterator<T1,T2> && rhs) 
+            : iter_x(rhs.iter_x), iter_y(rhs.iter_y)
+        {}
+
         T2 operator *() const { return T2(*iter_x, *iter_y); }
         const ls_iterator &operator ++() { ++iter_x; ++iter_y; return *this; }
         const ls_iterator &operator --() { --iter_x; --iter_y; return *this; }
-        ls_iterator operator ++(int) 
+        self_type operator ++(int) 
         { 
-            ls_iterator copy(*this); 
+            self_type copy(*this); 
             ++iter_x;
             ++iter_y;
             return copy;
         }
-        ls_iterator operator --(int) 
+        self_type operator --(int) 
         { 
-            ls_iterator copy(*this); 
+            self_type copy(*this); 
             --iter_y;
             --iter_x;
             return copy; 
         }
-        ls_iterator & operator =(const ls_iterator & other) 
+        self_type & operator =(const ls_iterator & other) 
         { 
             this->iter_x = other.iter_x; 
             this->iter_y = other.iter_y;
@@ -111,33 +129,43 @@ struct line_string
         bool operator  >(const ls_iterator &other) const { return iter_x > other.iter_x && iter_y > other.iter_y; }
         bool operator  <=(const ls_iterator &other) const { return iter_x <= other.iter_x && iter_y <= other.iter_y; }
         bool operator  >=(const ls_iterator &other) const { return iter_x >= other.iter_x && iter_y >= other.iter_y; }
-        ls_iterator & operator +(const long int &add) const 
+        self_type operator +(const difference_type &add) const 
         {
-            ls_iterator copy(*this);
-            iter_x + add;
-            iter_y + add;
+            self_type copy(*this);
+            copy.iter_x += add;
+            copy.iter_y += add;
             return copy;
         }
-        ls_iterator & operator +=(const long int &add)
+        self_type & operator +=(const difference_type &add)
         {
-            iter_x + add;
-            iter_y + add;
+            iter_x += add;
+            iter_y += add;
             return *this;
         }
-        ls_iterator & operator -(const long int &add) const 
+
+        difference_type operator -(self_type const& ref) const
         {
-            ls_iterator copy(*this);
-            iter_x - add;
-            iter_y - add;
+            return iter_x - ref.iter_x;
+        }
+
+        self_type operator -(const difference_type &add) const 
+        {
+            self_type copy(*this);
+            copy.iter_x -= add;
+            copy.iter_y -= add;
             return copy;
         }
-        ls_iterator & operator -=(const long int &add) 
+
+        friend self_type operator+(const difference_type &add, self_type const& ref);
+        friend self_type operator-(const difference_type &add, self_type const& ref);
+
+        self_type & operator -=(const difference_type &add) 
         {
-            iter_x - add;
-            iter_y - add;
+            iter_x -= add;
+            iter_y -= add;
             return *this;
         }
-        T2 operator [] (const long int &n) const
+        T2 operator [] (const difference_type &n) const
         {
             return T2(iter_x[n],iter_y[n]);
         }
@@ -162,7 +190,7 @@ struct line_string
         return point_ref(x[n],y[n]);
     }
     
-    point operator [] (const long int &n) const
+    point const operator [] (const long int &n) const
     {    
         return point(x[n],y[n]);
     }
@@ -180,6 +208,7 @@ struct line_string
     }
 
     inline bool empty() const { return x.empty(); }
+    inline std::size_t num_points() const { return x.size(); }
     inline std::size_t size() const { return x.size(); }
     
     inline void push_back(point const& p) 
@@ -274,6 +303,24 @@ struct line_string
         return const_reverse_iterator(x.crend(), y.crend());
     }
 };
+
+template <typename T1, typename T2>
+line_string::ls_iterator<T1,T2> operator+(typename T1::difference_type const& add, line_string::ls_iterator<T1,T2> const& ref)
+{
+    line_string::ls_iterator<T1,T2> copy(ref);
+    copy.iter_x += add;
+    copy.iter_y += add;
+    return copy;
+}
+
+template <typename T1, typename T2>
+line_string::ls_iterator<T1,T2> operator-(typename T1::difference_type const& add, line_string::ls_iterator<T1,T2> const& ref)
+{
+    line_string::ls_iterator<T1,T2> copy(ref);
+    copy.iter_x = add - ref.iter_x;
+    copy.iter_y = add - ref.iter_y;
+    return copy;
+}
 
 
 struct linear_ring : line_string {};
