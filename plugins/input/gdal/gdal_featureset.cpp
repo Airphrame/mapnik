@@ -185,10 +185,6 @@ feature_ptr gdal_featureset::get_feature(mapnik::query const& q)
         int im_width = int(width_res * intersect.width() + 0.5);
         int im_height = int(height_res * intersect.height() + 0.5);
 
-        double filter_factor = q.get_filter_factor();
-        im_width = int(im_width * filter_factor + 0.5);
-        im_height = int(im_height * filter_factor + 0.5);
-
         // case where we need to avoid upsampling so that the
         // image can be later scaled within raster_symbolizer
         if (im_width >= width || im_height >= height)
@@ -196,6 +192,10 @@ feature_ptr gdal_featureset::get_feature(mapnik::query const& q)
             im_width = width;
             im_height = height;
         }
+
+        double filter_factor = q.get_filter_factor();
+        im_width = int(im_width * filter_factor + 0.5);
+        im_height = int(im_height * filter_factor + 0.5);
 
         if (im_width > 0 && im_height > 0)
         {
